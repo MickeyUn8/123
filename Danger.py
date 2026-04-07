@@ -85,6 +85,34 @@ async def run_attack_command_async(chat_id, target_ip, target_port, duration):
     process = await asyncio.create_subprocess_shell(f"./bgmi {target_ip} {target_port} {duration} 100")
     await process.communicate()
     
+    async def countdown_timer(chat_id, message_id, target_ip, target_port, duration):
+    last_message_text = ""
+
+    for remaining in range(duration, 0, -1):
+        await asyncio.sleep(1)
+
+        new_text = (
+            f"*🚀 Attack Initiated! 🚀*\n\n"
+            f"*📡 Target Host: {target_ip}*\n"
+            f"*👉 Target Port: {target_port}*\n"
+            f"*⏰ Duration: {remaining} seconds remaining*\n"
+            "*Prepare for action! 🔥*"
+        )
+
+        if new_text != last_message_text:
+            try:
+                bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=new_text,
+                    reply_markup=create_inline_keyboard(),
+                    parse_mode='Markdown'
+                )
+                last_message_text = new_text
+            except Exception as e:
+                if "message is not modified" not in str(e):
+                    logging.error(f"Edit error: {e}")
+    
     bot.attack_in_progress = False
     
     bot.send_message(chat_id, "*✅ Attack Completed! ✅*\n"
@@ -284,32 +312,20 @@ def handle_attack_command(message):
                                                  f"*⏰ Duration: {duration} seconds remaining*\n"
                                                  "*Prepare for action! 🔥*", 
                                                  reply_markup=create_inline_keyboard(), parse_mode='Markdown')
+        # Start attack
+asyncio.run_coroutine_threadsafe(
+    run_attack_command_async(chat_id, target_ip, target_port, duration),
+    loop
+)
+
+# Start countdown (NEW)
+asyncio.run_coroutine_threadsafe(
+    countdown_timer(chat_id, sent_message.message_id, target_ip, target_port, duration),
+    loop
+)
 
         # Start attack in async thread
         asyncio.run_coroutine_threadsafe(run_attack_command_async(chat_id, target_ip, target_port, duration), loop)
-
-        # Countdown timer
-        last_message_text = ""
-        for remaining_time in range(duration, 0, -1):
-            time.sleep(1)
-            elapsed_time = time.time() - bot.attack_start_time
-            remaining_time = max(0, bot.attack_duration - int(elapsed_time))
-            new_message_text = (f"*🚀 Attack Initiated! 🚀*\n\n"
-                                f"*📡 Target Host: {target_ip}*\n"
-                                f"*👉 Target Port: {target_port}*\n"
-                                f"*⏰ Duration: {remaining_time} seconds remaining*\n"
-                                "*Prepare for action! 🔥*")
-            if new_message_text != last_message_text:
-                try:
-                    bot.edit_message_text(chat_id=chat_id, message_id=sent_message.message_id, 
-                                          text=new_message_text, 
-                                          reply_markup=create_inline_keyboard(), parse_mode='Markdown')
-                    last_message_text = new_message_text
-                except Exception as e:
-                    if "message is not modified" not in str(e):
-                        logging.error(f"Error editing message: {e}")
-
-        bot.attack_in_progress = False
 
     except Exception as e:
         logging.error(f"Error in attack command: {e}")
